@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: quran-voice-web
+    name: quran-voice-render
     env: python
     buildCommand: |
       pip install --upgrade pip setuptools wheel
