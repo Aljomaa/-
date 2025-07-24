@@ -1,4 +1,5 @@
 pyrogram==2.0.106
 tgcrypto==1.2.5
 flask==2.2.5
-git+https://github.com/pytgcalls/pytgcalls.git@v1.2.3
+git+https://github.com/pytgcalls/tgcalls@main#egg=tgcalls
+git+https://github.com/pytgcalls/pytgcalls@3.0.0.dev22#egg=pytgcalls
