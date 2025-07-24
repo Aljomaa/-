@@ -5,10 +5,8 @@ from pyrogram import Client
 from pytgcalls import PyTgCalls
 from pytgcalls.types.input_stream import InputStream
 from pytgcalls.types.input_stream.input_audio_stream import InputAudioStream
-
 from flask import Flask
 
-# =====⚙️ الإعدادات =====
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -21,14 +19,12 @@ logging.basicConfig(level=logging.INFO)
 app = Client("quran_radio_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 voice = PyTgCalls(app)
 
-# =====🌐 سيرفر وهمي (لـ Render فقط) =====
 web = Flask(__name__)
 
 @web.route("/")
 def index():
-    return "✅ Quran Bot is running"
+    return "✅ Quran bot is running"
 
-# =====🎧 البث الصوتي =====
 async def start_stream():
     await app.start()
     await voice.start()
@@ -49,7 +45,6 @@ async def start_stream():
             logging.info("🔁 إعادة المحاولة بعد 10 ثوانٍ")
             await asyncio.sleep(10)
 
-# =====🧠 تشغيل Flask و Pyrogram معًا =====
 def run_all():
     import threading
     threading.Thread(target=lambda: web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
