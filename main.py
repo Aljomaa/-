@@ -12,6 +12,7 @@ import PyPDF2
 import requests
 from PIL import Image
 from flask_sqlalchemy import SQLAlchemy
+from queue import Queue
 
 # تحميل متغيرات البيئة
 load_dotenv()
@@ -36,7 +37,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 bot = Bot(token=TELEGRAM_TOKEN)
-dispatcher = Dispatcher(bot, update_queue=None, workers=0, use_context=True)
+update_queue = Queue()
+dispatcher = Dispatcher(bot, update_queue=update_queue, workers=4, use_context=True)
 
 # النماذج
 class User(db.Model):
@@ -76,125 +78,149 @@ def generate_image(prompt: str) -> bytes:
 def subscription_required(func):
     @wraps(func)
     def wrapper(update: Update, context):
-        tg_id = update.effective_user.id
-        with app.app_context():
-            user = User.query.filter_by(telegram_id=tg_id).first()
-            if not user:
-                user = User(telegram_id=tg_id)
-                db.session.add(user)
-            paid = PaidUser.query.filter_by(telegram_id=tg_id).first()
+        try:
+            tg_id = update.effective_user.id
+            with app.app_context():
+                user = User.query.filter_by(telegram_id=tg_id).first()
+                if not user:
+                    user = User(telegram_id=tg_id)
+                    db.session.add(user)
+                paid = PaidUser.query.filter_by(telegram_id=tg_id).first()
 
-            if user.free_usage_reset.date() != datetime.utcnow().date():
-                user.free_usage_count = 0
-                user.free_usage_reset = datetime.utcnow()
+                if user.free_usage_reset.date() != datetime.utcnow().date():
+                    user.free_usage_count = 0
+                    user.free_usage_reset = datetime.utcnow()
 
-            if tg_id in ADMIN_IDS:
-                db.session.commit()
-                return func(update, context)
+                if tg_id in ADMIN_IDS:
+                    db.session.commit()
+                    return func(update, context)
 
-            if paid and paid.is_active():
-                db.session.commit()
-                return func(update, context)
+                if paid and paid.is_active():
+                    db.session.commit()
+                    return func(update, context)
 
-            if user.free_usage_count < FREE_LIMIT:
-                user.free_usage_count += 1
-                db.session.commit()
-                return func(update, context)
-            else:
-                update.message.reply_text(
-                    f"❌ لقد استنفدت الحد المجاني اليومي ({FREE_LIMIT} استخدام).\n"
-                    "🔓 راسل المشرف للترقية إلى GPT-4 بلا حدود."
-                )
+                if user.free_usage_count < FREE_LIMIT:
+                    user.free_usage_count += 1
+                    db.session.commit()
+                    return func(update, context)
+                else:
+                    update.message.reply_text(
+                        f"❌ لقد استنفدت الحد المجاني اليومي ({FREE_LIMIT} استخدام).\n"
+                        "🔓 راسل المشرف للترقية إلى GPT-4 بلا حدود."
+                    )
+        except Exception as e:
+            print(f"❌ subscription_required error: {e}")
     return wrapper
 
 # المعالجات
 def start(update, context):
-    update.message.reply_text(
-        "🤖 أهلاً بك!\n"
-        "- النسخة المجانية: GPT-3.5 | 10 طلبات يومياً\n"
-        "- النسخة المدفوعة: GPT-4 بلا حدود\n"
-        "أرسل سؤالك أو استخدم /image لتوليد صورة.\n"
-        "راسل المشرف للاشتراك."
-    )
+    try:
+        update.message.reply_text(
+            "🤖 أهلاً بك!\n"
+            "- النسخة المجانية: GPT-3.5 | 10 طلبات يومياً\n"
+            "- النسخة المدفوعة: GPT-4 بلا حدود\n"
+            "أرسل سؤالك أو استخدم /image لتوليد صورة.\n"
+            "راسل المشرف للاشتراك."
+        )
+    except Exception as e:
+        print(f"❌ start error: {e}")
 
 @subscription_required
 def handle_text(update, context):
-    paid = bool(PaidUser.query.filter_by(telegram_id=update.effective_user.id).first())
-    reply = ask_openai(update.message.text, paid=paid)
-    update.message.reply_text(reply)
+    try:
+        paid = bool(PaidUser.query.filter_by(telegram_id=update.effective_user.id).first())
+        reply = ask_openai(update.message.text, paid=paid)
+        update.message.reply_text(reply)
+    except Exception as e:
+        print(f"❌ handle_text error: {e}")
 
 @subscription_required
 def handle_document(update, context):
-    file = update.message.document.get_file()
-    bio = io.BytesIO()
-    file.download(out=bio)
-    bio.seek(0)
+    try:
+        file = update.message.document.get_file()
+        bio = io.BytesIO()
+        file.download(out=bio)
+        bio.seek(0)
 
-    if update.message.document.file_name.lower().endswith('.pdf'):
-        reader = PyPDF2.PdfReader(bio)
-        text = "".join(page.extract_text() for page in reader.pages if page.extract_text())
-    else:
-        text = bio.read().decode(errors="ignore")
+        if update.message.document.file_name.lower().endswith('.pdf'):
+            reader = PyPDF2.PdfReader(bio)
+            text = "".join(page.extract_text() for page in reader.pages if page.extract_text())
+        else:
+            text = bio.read().decode(errors="ignore")
 
-    if len(text) > 2000:
-        text = text[:2000] + "\n\n...[مختصر]"
+        if len(text) > 2000:
+            text = text[:2000] + "\n\n...[مختصر]"
 
-    paid = bool(PaidUser.query.filter_by(telegram_id=update.effective_user.id).first())
-    answer = ask_openai(f"هذا محتوى الملف:\n{text}", paid=paid)
-    update.message.reply_text(answer)
+        paid = bool(PaidUser.query.filter_by(telegram_id=update.effective_user.id).first())
+        answer = ask_openai(f"هذا محتوى الملف:\n{text}", paid=paid)
+        update.message.reply_text(answer)
+    except Exception as e:
+        print(f"❌ handle_document error: {e}")
 
 @subscription_required
 def handle_photo(update, context):
-    photo = update.message.photo[-1].get_file()
-    bio = io.BytesIO()
-    photo.download(out=bio)
-    bio.seek(0)
-    update.message.reply_photo(photo=bio, caption="✅ استلمت الصورة، كيف تريد تحليلها؟")
+    try:
+        photo = update.message.photo[-1].get_file()
+        bio = io.BytesIO()
+        photo.download(out=bio)
+        bio.seek(0)
+        update.message.reply_photo(photo=bio, caption="✅ استلمت الصورة، كيف تريد تحليلها؟")
+    except Exception as e:
+        print(f"❌ handle_photo error: {e}")
 
 @subscription_required
 def handle_image_command(update, context):
-    prompt = ' '.join(context.args)
-    if not prompt:
-        update.message.reply_text("❗ استخدم: /image وصف_الصورة")
-        return
-    update.message.reply_text("🖼️ جاري توليد الصورة…")
-    img_data = generate_image(prompt)
-    bio = io.BytesIO(img_data)
-    bio.name = 'generated.png'
-    update.message.reply_photo(photo=bio)
+    try:
+        prompt = ' '.join(context.args)
+        if not prompt:
+            update.message.reply_text("❗ استخدم: /image وصف_الصورة")
+            return
+        update.message.reply_text("🖼️ جاري توليد الصورة…")
+        img_data = generate_image(prompt)
+        bio = io.BytesIO(img_data)
+        bio.name = 'generated.png'
+        update.message.reply_photo(photo=bio)
+    except Exception as e:
+        print(f"❌ handle_image_command error: {e}")
 
 def add_paid(update, context):
-    if update.effective_user.id not in ADMIN_IDS:
-        return
     try:
-        target = int(context.args[0])
-    except:
-        update.message.reply_text("❗ استخدم: /addpaid <telegram_id>")
-        return
-    with app.app_context():
-        if not PaidUser.query.filter_by(telegram_id=target).first():
-            db.session.add(PaidUser(telegram_id=target))
-            db.session.commit()
-            update.message.reply_text(f"✅ تم تفعيل الاشتراك للـ ID: {target}")
-        else:
-            update.message.reply_text("ℹ️ هذا المستخدم مشترك مسبقاً.")
+        if update.effective_user.id not in ADMIN_IDS:
+            return
+        try:
+            target = int(context.args[0])
+        except:
+            update.message.reply_text("❗ استخدم: /addpaid <telegram_id>")
+            return
+        with app.app_context():
+            if not PaidUser.query.filter_by(telegram_id=target).first():
+                db.session.add(PaidUser(telegram_id=target))
+                db.session.commit()
+                update.message.reply_text(f"✅ تم تفعيل الاشتراك للـ ID: {target}")
+            else:
+                update.message.reply_text("ℹ️ هذا المستخدم مشترك مسبقاً.")
+    except Exception as e:
+        print(f"❌ add_paid error: {e}")
 
 def remove_paid(update, context):
-    if update.effective_user.id not in ADMIN_IDS:
-        return
     try:
-        target = int(context.args[0])
-    except:
-        update.message.reply_text("❗ استخدم: /removepaid <telegram_id>")
-        return
-    with app.app_context():
-        paid = PaidUser.query.filter_by(telegram_id=target).first()
-        if paid:
-            db.session.delete(paid)
-            db.session.commit()
-            update.message.reply_text(f"❌ تم إلغاء الاشتراك للـ ID: {target}")
-        else:
-            update.message.reply_text("ℹ️ لم أجد هذا المستخدم في قائمة المشتركين.")
+        if update.effective_user.id not in ADMIN_IDS:
+            return
+        try:
+            target = int(context.args[0])
+        except:
+            update.message.reply_text("❗ استخدم: /removepaid <telegram_id>")
+            return
+        with app.app_context():
+            paid = PaidUser.query.filter_by(telegram_id=target).first()
+            if paid:
+                db.session.delete(paid)
+                db.session.commit()
+                update.message.reply_text(f"❌ تم إلغاء الاشتراك للـ ID: {target}")
+            else:
+                update.message.reply_text("ℹ️ لم أجد هذا المستخدم في قائمة المشتركين.")
+    except Exception as e:
+        print(f"❌ remove_paid error: {e}")
 
 # تسجيل المعالجات
 dispatcher.add_handler(CommandHandler("start", start))
@@ -208,8 +234,11 @@ dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_te
 # نقطة Webhook
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
+    try:
+        update = Update.de_json(request.get_json(force=True), bot)
+        dispatcher.process_update(update)
+    except Exception as e:
+        print(f"❌ webhook error: {e}")
     return "OK"
 
 # تعيين Webhook وتشغيل السيرفر
