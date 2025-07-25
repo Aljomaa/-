@@ -212,10 +212,8 @@ def webhook():
     dispatcher.process_update(update)
     return "OK"
 
-# تعيين Webhook عند التشغيل
-def set_webhook():
+# تعيين Webhook تلقائيًا داخل Flask
+@app.before_first_request
+def activate_webhook():
     bot.set_webhook(WEBHOOK_URL)
-    print("✅ Webhook set")
-
-if __name__ == "__main__":
-    set_webhook()
+    print("✅ Webhook set from Flask")
