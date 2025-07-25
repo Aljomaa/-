@@ -13,31 +13,30 @@ from PIL import Image
 import requests
 from flask_sqlalchemy import SQLAlchemy
 
-#–– تحميل البيئة ––
-os.environ["TELEGRAM_TOKEN"] = "7673363668:AAHeGijIJJ9n9spmJCWsL4zbGNzav6sfxp4"
-os.environ["OPENAI_API_KEY"] = "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"
-os.environ["WEBHOOK_URL"] = "https://your-app.onrender.com/webhook"
-os.environ["ADMIN_IDS"] = "6849903309"
-
+# تحميل متغيرات البيئة من .env
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 ADMIN_IDS = set(map(int, os.getenv("ADMIN_IDS", "").split(",")))
 FREE_LIMIT = int(os.getenv("FREE_LIMIT", 10))
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bot.db")
 
+# تحقق من القيم المطلوبة
 if not (TELEGRAM_TOKEN and OPENAI_API_KEY and WEBHOOK_URL):
     raise ValueError("يرجى ضبط TELEGRAM_TOKEN و OPENAI_API_KEY و WEBHOOK_URL في .env")
 
+# إعدادات OpenAI
 openai.api_key = OPENAI_API_KEY
 
+# إعداد Flask و Telegram
 app = Flask(__name__)
 bot = Bot(token=TELEGRAM_TOKEN)
 dispatcher = Dispatcher(bot, update_queue=None, workers=0, use_context=True)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
+# إعداد قاعدة البيانات
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
 
 class User(db.Model):
@@ -56,6 +55,7 @@ class PaidUser(db.Model):
 
 db.create_all()
 
+# استخدام GPT
 def ask_openai(prompt, paid=False):
     model = "gpt-4" if paid else "gpt-3.5-turbo"
     resp = openai.ChatCompletion.create(
@@ -66,10 +66,12 @@ def ask_openai(prompt, paid=False):
     )
     return resp.choices[0].message.content.strip()
 
+# توليد صورة
 def generate_image(prompt: str) -> bytes:
     resp = openai.Image.create(prompt=prompt, n=1, size="512x512")
     return requests.get(resp['data'][0]['url']).content
 
+# التحقق من الاشتراك قبل التنفيذ
 def subscription_required(func):
     @wraps(func)
     def wrapper(update, context, *args, **kwargs):
@@ -104,6 +106,7 @@ def subscription_required(func):
             )
     return wrapper
 
+# الأوامر
 def start(update, context):
     update.message.reply_text(
         "🤖 أهلاً بك!\n"
@@ -151,7 +154,7 @@ def handle_photo(update, context):
 def handle_image_command(update, context):
     prompt = ' '.join(context.args)
     if not prompt:
-        update.message.reply_text("❗ استخدم الأمر هكذا: /image وصف_الصورة")
+        update.message.reply_text("❗ استخدم: /image وصف_الصورة")
         return
     update.message.reply_text("🖼️ جاري توليد الصورة…")
     img_data = generate_image(prompt)
@@ -159,6 +162,7 @@ def handle_image_command(update, context):
     bio.name = 'generated.png'
     update.message.reply_photo(photo=bio)
 
+# أوامر المشرف
 def add_paid(update, context):
     if update.effective_user.id not in ADMIN_IDS: return
     try:
@@ -188,6 +192,7 @@ def remove_paid(update, context):
     else:
         update.message.reply_text("ℹ️ لم أجد هذا المستخدم في قائمة المشتركين.")
 
+# تسجيل المعالجات
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CommandHandler("addpaid", add_paid))
 dispatcher.add_handler(CommandHandler("removepaid", remove_paid))
@@ -196,6 +201,7 @@ dispatcher.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 dispatcher.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
+# نقطة الويبهوك
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if request.method == "POST":
@@ -205,10 +211,12 @@ def webhook():
     else:
         abort(405)
 
+# تعيين الويبهوك عند التشغيل
 def set_webhook():
     success = bot.set_webhook(WEBHOOK_URL)
     print("Webhook set:", success)
 
 if __name__ == "__main__":
     set_webhook()
+    # للتجريب محليًا:
     # app.run(host="0.0.0.0", port=5000)
