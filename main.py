@@ -53,7 +53,8 @@ class PaidUser(db.Model):
     def is_active(self):
         return self.joined_at + relativedelta(months=1) > datetime.utcnow()
 
-db.create_all()
+with app.app_context():
+    db.create_all()
 
 # استخدام GPT
 def ask_openai(prompt, paid=False):
