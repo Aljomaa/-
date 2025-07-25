@@ -27,15 +27,16 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bot.db")
 if not (TELEGRAM_TOKEN and OPENAI_API_KEY and WEBHOOK_URL):
     raise ValueError("يرجى ضبط TELEGRAM_TOKEN و OPENAI_API_KEY و WEBHOOK_URL في .env")
 
-# إعدادات OpenAI
+# إعداد OpenAI
 openai.api_key = OPENAI_API_KEY
 
-# إعداد Flask و Telegram
+# إعداد Flask و SQLAlchemy
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+# Telegram bot setup
 bot = Bot(token=TELEGRAM_TOKEN)
 update_queue = Queue()
 dispatcher = Dispatcher(bot, update_queue=update_queue, workers=4, use_context=True)
@@ -69,12 +70,11 @@ def ask_openai(prompt, paid=False):
     )
     return resp.choices[0].message.content.strip()
 
-# توليد صورة
 def generate_image(prompt: str) -> bytes:
     resp = openai.Image.create(prompt=prompt, n=1, size="512x512")
     return requests.get(resp['data'][0]['url']).content
 
-# التحقق من الاشتراك
+# ديكوريتر الاشتراك
 def subscription_required(func):
     @wraps(func)
     def wrapper(update: Update, context):
@@ -128,6 +128,7 @@ def start(update, context):
 @subscription_required
 def handle_text(update, context):
     try:
+        print(f"📥 Text from {update.effective_user.id}: {update.message.text}")
         paid = bool(PaidUser.query.filter_by(telegram_id=update.effective_user.id).first())
         reply = ask_openai(update.message.text, paid=paid)
         update.message.reply_text(reply)
@@ -187,11 +188,7 @@ def add_paid(update, context):
     try:
         if update.effective_user.id not in ADMIN_IDS:
             return
-        try:
-            target = int(context.args[0])
-        except:
-            update.message.reply_text("❗ استخدم: /addpaid <telegram_id>")
-            return
+        target = int(context.args[0])
         with app.app_context():
             if not PaidUser.query.filter_by(telegram_id=target).first():
                 db.session.add(PaidUser(telegram_id=target))
@@ -206,11 +203,7 @@ def remove_paid(update, context):
     try:
         if update.effective_user.id not in ADMIN_IDS:
             return
-        try:
-            target = int(context.args[0])
-        except:
-            update.message.reply_text("❗ استخدم: /removepaid <telegram_id>")
-            return
+        target = int(context.args[0])
         with app.app_context():
             paid = PaidUser.query.filter_by(telegram_id=target).first()
             if paid:
@@ -222,7 +215,7 @@ def remove_paid(update, context):
     except Exception as e:
         print(f"❌ remove_paid error: {e}")
 
-# تسجيل المعالجات
+# ربط المعالجات
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CommandHandler("addpaid", add_paid))
 dispatcher.add_handler(CommandHandler("removepaid", remove_paid))
@@ -231,7 +224,7 @@ dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
 dispatcher.add_handler(MessageHandler(Filters.photo, handle_photo))
 dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
 
-# نقطة Webhook
+# نقطة webhook
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
@@ -241,7 +234,7 @@ def webhook():
         print(f"❌ webhook error: {e}")
     return "OK"
 
-# تعيين Webhook وتشغيل السيرفر
+# تشغيل السيرفر + ضبط webhook
 if __name__ == "__main__":
     with app.app_context():
         bot.set_webhook(WEBHOOK_URL)
