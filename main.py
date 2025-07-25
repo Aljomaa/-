@@ -212,11 +212,12 @@ def webhook():
     dispatcher.process_update(update)
     return "OK"
 
-# تعيين Webhook تلقائيًا داخل Flask
+# ✅ تعيين Webhook تلقائياً من داخل Flask
 @app.before_first_request
 def activate_webhook():
     bot.set_webhook(WEBHOOK_URL)
     print("✅ Webhook set from Flask")
 
+# ✅ إبقاء السيرفر شغال على Render
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
