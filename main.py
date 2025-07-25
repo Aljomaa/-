@@ -36,7 +36,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 bot = Bot(token=TELEGRAM_TOKEN)
-dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher = Dispatcher(bot, update_queue=None, workers=0, use_context=True)
 
 # النماذج
 class User(db.Model):
@@ -132,7 +132,7 @@ def handle_document(update, context):
 
     if update.message.document.file_name.lower().endswith('.pdf'):
         reader = PyPDF2.PdfReader(bio)
-        text = "".join(page.extract_text() for page in reader.pages)
+        text = "".join(page.extract_text() for page in reader.pages if page.extract_text())
     else:
         text = bio.read().decode(errors="ignore")
 
@@ -212,7 +212,7 @@ def webhook():
     dispatcher.process_update(update)
     return "OK"
 
-# ✅ تشغيل Webhook و Flask على Render
+# تعيين Webhook وتشغيل السيرفر
 if __name__ == "__main__":
     with app.app_context():
         bot.set_webhook(WEBHOOK_URL)
