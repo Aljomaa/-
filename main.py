@@ -217,3 +217,6 @@ def webhook():
 def activate_webhook():
     bot.set_webhook(WEBHOOK_URL)
     print("✅ Webhook set from Flask")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
