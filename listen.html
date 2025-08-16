@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>استمع للقرآن | تفكير إسلامي</title>
+    <meta name="description" content="استمع إلى القرآن الكريم أونلاين بصوت نخبة من القرّاء، مع إمكانية تحميل السور بصيغة MP3.">
+    <link rel="canonical" href="https://thinkingislamic.com/listen.html">
+    <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Kufi+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body data-page="listen">
+    <header class="ti-navbar">
+      <div class="container nav-inner">
+        <a class="brand" href="/">
+          <img class="brand-logo" src="/assets/icons/logo.svg" alt="" aria-hidden="true">
+          <span class="brand-text">تفكير إسلامي</span>
+        </a>
+        <nav class="nav-links" aria-label="التنقل الرئيسي">
+          <a href="/index.html">الرئيسية</a>
+          <a href="/listen.html" class="active">استمع</a>
+          <a href="/download.html">تحميل</a>
+          <a href="/reciters.html">القرّاء</a>
+          <a href="/articles.html">المحتوى العلمي</a>
+          <a href="/podcasts.html">بودكاست</a>
+          <a href="#" class="donate">تبرّع</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="section">
+        <h1 class="sr-only">الاستماع للقرآن الكريم</h1>
+        <div class="filters">
+          <input id="searchInput" class="input" type="search" placeholder="ابحث عن سورة... (مثال: الملك)">
+          <select id="reciterSelect" class="input select" aria-label="اختيار القارئ"></select>
+          <select id="classificationSelect" class="input select" aria-label="تصنيف السور">
+            <option value="all">الكل</option>
+            <option value="meccan">مكية</option>
+            <option value="medinan">مدنية</option>
+            <option value="byalpha">ترتيب أبجدي</option>
+            <option value="bylength">حسب الطول</option>
+          </select>
+        </div>
+
+        <div id="surahsList" class="surahs-list"></div>
+      </section>
+    </main>
+
+    <div class="audio-bar">
+      <div class="container audio-inner">
+        <div class="audio-title" id="nowPlaying">لا يوجد تشغيل</div>
+        <div class="audio-controls">
+          <button id="prevBtn" class="btn" title="السابق">⏮️</button>
+          <button id="playPauseBtn" class="btn btn-primary" title="تشغيل/إيقاف">▶️</button>
+          <button id="nextBtn" class="btn" title="التالي">⏭️</button>
+        </div>
+      </div>
+      <audio id="globalAudio" preload="none" controls class="container mt-2"></audio>
+    </div>
+
+    <script src="/js/data.js"></script>
+    <script src="/js/app.js"></script>
+  </body>
+</html>
